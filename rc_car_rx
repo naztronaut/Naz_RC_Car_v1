@@ -1,0 +1,169 @@
+/* JoyStick module receiver code
+By Nazmus
+http://www.Easyprogramming.net
+http://nazm.us
+ - CONNECTIONS: nRF24L01 Modules See:
+ http://arduino-info.wikispaces.com/Nrf24L01-2.4GHz-HowTo
+   1 - GND
+   2 - VCC 3.3V !!! NOT 5V
+   3 - CE to Arduino pin 6
+   4 - CSN to Arduino pin 7
+   5 - SCK to Arduino pin 13
+   6 - MOSI to Arduino pin 11
+   7 - MISO to Arduino pin 12
+   8 - UNUSED
+   
+   Above connections created by shield
+   On Motor Shield connect Servos to servo connections 1 & 2
+ */
+
+/*-----( Import needed libraries )-----*/
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <Servo.h>
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
+#include "utility/Adafruit_PWMServoDriver.h"
+/*-----( Declare Constants and Pin Numbers )-----*/
+#define CE_PIN 6
+#define CSN_PIN 7
+  
+// NOTE: the "LL" at the end of the constant is "LongLong" type
+const uint64_t pipe = 0xE8E8F0F0E1LL; // Define the transmit pipe
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+const int servo1 = 9; // first servo
+const int servo2 = 10; // second servo
+int servoVal; // variable to read the value from the analog pin
+Adafruit_DCMotor *myMotor = AFMS.getMotor(1);
+Adafruit_DCMotor *myMotor1 = AFMS.getMotor(2);
+
+Servo myservo1; // create servo1
+Servo myservo2; // create servo2
+/*-----( Declare objects )-----*/
+RF24 radio(CE_PIN, CSN_PIN); // Create a Radio
+/*-----( Declare Variables )-----*/
+int joystick[7];  // 6 element array holding Joystick readings
+
+void setup()   /****** SETUP: RUNS ONCE ******/
+{
+  Serial.begin(9600);
+  delay(1000);
+  AFMS.begin();  // create with the default frequency 1.6KHz
+  myservo1.attach(servo1); // attaches the servo1 
+  myservo2.attach(servo2); // attaches the servo2
+  Serial.println("Nrf24L01 Receiver Starting");
+  radio.begin();
+  radio.openReadingPipe(1,pipe);
+  radio.startListening();;
+  
+   // turn on motor M1
+  myMotor->setSpeed(200);
+  myMotor->run(RELEASE);
+  
+   // turn on motor M3
+  myMotor1->setSpeed(200);
+  myMotor1->run(RELEASE);
+}//--(end setup )---
+
+
+void loop()   /****** LOOP: RUNS CONSTANTLY ******/
+{
+  if ( radio.available() )
+  {
+    // Read the data payload until we've received everything
+    bool done = false;
+    while (!done)
+    {
+      done = radio.read( joystick, sizeof(joystick) );
+      int joystickX = map(joystick[0],0,1023,0,180); // turn value of 0-1023 to 0-180 degrees
+      int joystickY = map(joystick[1],0,1023,0,180);  // turn value of 0-1023 to 0-180 degrees
+      int pot = map(joystick[6],0,1023,0,255);
+      // the four button variables from joystick array
+      int upbut = joystick[2];
+      int rightbut = joystick[3];
+      int downbut = joystick[4];
+      int leftbut = joystick[5];
+      
+      
+      servoVal = joystickX; // scale it to use it with the servo (result between 0 and 180)
+      myservo2.write(servoVal); // sets the servo position according to the scaled value
+      //Serial.println(servoVal); // for debugging
+      
+      servoVal = joystickY; // scale it to use it with the servo (result between 0 and 180)
+      myservo1.write(servoVal); // sets the servo position according to the scaled value
+      
+ 
+      if(upbut == 0)
+      {
+        myMotor->run(FORWARD);
+        myMotor->setSpeed(pot);
+        myMotor1->run(FORWARD);
+        myMotor1->setSpeed(pot);
+      }
+      
+     else if(downbut == 0)
+      {
+        myMotor->run(BACKWARD);
+        myMotor->setSpeed(pot);
+        myMotor1->run(BACKWARD);
+        myMotor1->setSpeed(pot);
+      }
+      
+      else if(leftbut == 0)
+      {
+        myMotor1->run(BACKWARD);
+        myMotor1->setSpeed(pot);
+        myMotor->run(FORWARD);
+        myMotor->setSpeed(pot);
+      }
+      
+      else if (rightbut == 0)
+      {
+        myMotor1->run(FORWARD);
+        myMotor1->setSpeed(pot);
+        myMotor->run(BACKWARD);
+        myMotor->setSpeed(pot);
+      }
+      
+      else 
+      {
+        myMotor->run(RELEASE);
+        myMotor1->run(RELEASE);
+      }
+      
+      //Serial.println(servoVal); // for debugging
+  
+      // Fetch the data payload - Debugging code below
+      
+      Serial.print("X = ");
+      
+      Serial.print(joystickX);
+      Serial.print(" Y = ");  
+      
+      Serial.print(joystickY);
+      Serial.print(" Up = ");
+      
+      Serial.print(joystick[2]);
+      Serial.print(" Right = ");  
+      
+      Serial.print(joystick[3]);
+      Serial.print(" Down = ");
+      
+      Serial.print(joystick[4]);
+      Serial.print(" Left = ");  
+      
+      Serial.print(joystick[5]);
+       Serial.print(" Pot = ");  
+      
+      Serial.println(pot);
+     
+     delay(15); // waits for the servo to get there
+    }
+  }
+  else
+  {    
+      Serial.println("No radio available");
+  }
+
+}//--(end main loop )---
